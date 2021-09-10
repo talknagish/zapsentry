@@ -1,12 +1,22 @@
 package zapsentry
 
 import (
+	"fmt"
+	"go.uber.org/zap"
 	"strings"
 	"time"
 
 	"github.com/getsentry/sentry-go"
 	"go.uber.org/zap/zapcore"
 )
+
+func NewScope() zapcore.Field {
+	return zap.Any("zapsentry_scope", sentry.NewScope())
+}
+
+func WithNewScope(s *sentry.Scope) zapcore.Field {
+	return zap.Any("zapsentry_scope", s)
+}
 
 func NewCore(cfg Configuration, factory SentryClientFactory) (zapcore.Core, error) {
 	client, err := factory()
@@ -63,17 +73,44 @@ func (c *core) Write(ent zapcore.Entry, fs []zapcore.Field) error {
 		}
 	}
 
-	hub := c.cfg.Hub
-	if hub == nil {
-		hub = sentry.CurrentHub()
-	}
-	_ = c.client.CaptureEvent(event, nil, hub.Scope())
+	_ = c.client.CaptureEvent(event, nil, c.scope())
 
 	// We may be crashing the program, so should flush any buffered events.
 	if ent.Level > zapcore.ErrorLevel {
 		c.client.Flush(c.flushTimeout)
 	}
 	return nil
+}
+
+func (c *core) hub() *sentry.Hub {
+	if c.cfg.Hub != nil {
+		return c.cfg.Hub
+	}
+	return sentry.CurrentHub()
+}
+
+func (c *core) scope() *sentry.Scope {
+	if c.sentryScope != nil {
+		return c.sentryScope
+	}
+	return c.hub().Scope()
+}
+
+func findScope(fs []zapcore.Field) *sentry.Scope {
+	for _, f := range fs {
+		if scope, ok := f.Interface.(*sentry.Scope); ok {
+			return scope
+		}
+	}
+	return nil
+}
+
+func (c *core) shouldBeEncoded(field zapcore.Field) bool {
+	if _, ok := field.Interface.(*sentry.Scope); ok {
+		return false
+	}
+
+	return true
 }
 
 func (c *core) Sync() error {
@@ -91,6 +128,9 @@ func (c *core) with(fs []zapcore.Field) *core {
 	// Add fields to an in-memory encoder.
 	enc := zapcore.NewMapObjectEncoder()
 	for _, f := range fs {
+		if !c.shouldBeEncoded(f) {
+			continue
+		}
 		f.AddTo(enc)
 	}
 
@@ -105,6 +145,7 @@ func (c *core) with(fs []zapcore.Field) *core {
 		flushTimeout: c.flushTimeout,
 		fields:       m,
 		LevelEnabler: c.LevelEnabler,
+		sentryScope:  findScope(fs),
 	}
 }
 
@@ -121,6 +162,8 @@ type core struct {
 	cfg    *Configuration
 	zapcore.LevelEnabler
 	flushTimeout time.Duration
+
+	sentryScope *sentry.Scope
 
 	fields map[string]interface{}
 }
