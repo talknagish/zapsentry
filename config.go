@@ -39,5 +39,6 @@ type Configuration struct {
 
 	// Hub overrides the sentry.CurrentHub value.
 	// See sentry.Hub docs for more detail.
-	Hub *sentry.Hub
+	Hub         *sentry.Hub
+	DynamicTags []string // tags from zap field names
 }

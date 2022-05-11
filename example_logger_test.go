@@ -29,11 +29,14 @@ func ExampleAttachCoreToLogger() {
 
 	// Setup zapsentry
 	core, err := zapsentry.NewCore(zapsentry.Configuration{
-		Level: zapcore.ErrorLevel, // when to send message to sentry
-		EnableBreadcrumbs: true, // enable sending breadcrumbs to Sentry
-		BreadcrumbLevel: zapcore.InfoLevel, // at what level should we sent breadcrumbs to sentry
+		Level:             zapcore.ErrorLevel, // when to send message to sentry
+		EnableBreadcrumbs: true,               // enable sending breadcrumbs to Sentry
+		BreadcrumbLevel:   zapcore.InfoLevel,  // at what level should we sent breadcrumbs to sentry
 		Tags: map[string]string{
 			"component": "system",
+		},
+		DynamicTags: []string{
+			"traceID",
 		},
 	}, zapsentry.NewSentryClientFromClient(sentryClient))
 	if err != nil {
@@ -44,7 +47,7 @@ func ExampleAttachCoreToLogger() {
 	// Send error log
 	newLogger.
 		With(zapsentry.NewScope()).
-		Error("[error] something went wrong!", zap.String("method", "unknown"))
+		Error("[error] something went wrong!", zap.String("method", "unknown"), zap.Int("traceID", 42))
 
 	// Check output
 	fmt.Println(recordedLogs.All()[0].Message)
@@ -57,8 +60,8 @@ func ExampleAttachCoreToLogger() {
 
 func mockSentryClient(f func(event *sentry.Event)) *sentry.Client {
 	client, _ := sentry.NewClient(sentry.ClientOptions{
-		Dsn:              "",
-		Transport:        &transport{MockSendEvent: f},
+		Dsn:       "",
+		Transport: &transport{MockSendEvent: f},
 	})
 	return client
 }
@@ -79,4 +82,3 @@ func (f *transport) Configure(_ sentry.ClientOptions) {}
 func (f *transport) SendEvent(event *sentry.Event) {
 	f.MockSendEvent(event)
 }
-
