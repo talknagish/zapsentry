@@ -2,6 +2,7 @@ package zapsentry
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"time"
@@ -90,7 +91,7 @@ func (c *core) Write(ent zapcore.Entry, fs []zapcore.Field) error {
 		event.Timestamp = ent.Time
 		event.Level = sentrySeverity(ent.Level)
 		event.Extra = clone.fields
-		event.Tags = c.cfg.Tags
+		event.Tags = clone.transferExtrasToTags()
 		event.Exception = clone.createExceptions()
 
 		if event.Exception == nil && !c.cfg.DisableStacktrace && c.client.Options().AttachStacktrace {
@@ -118,6 +119,44 @@ func (c *core) addSpecialFields(ent zapcore.Entry, fs []zapcore.Field) []zapcore
 	}
 
 	return fs
+}
+
+func (c *core) transferExtrasToTags() map[string]string {
+	if len(c.cfg.DynamicTags) < 1 {
+		return c.cfg.Tags
+	}
+
+	// add dynamic tags
+	resultTags := make(map[string]string)
+	for name, value := range c.fields {
+		for _, tag := range c.cfg.DynamicTags {
+			if name == tag {
+				switch v := value.(type) {
+				case string:
+					resultTags[name] = v
+				default:
+					resultTags[name] = fmt.Sprintf("%v", v)
+				}
+				// remove from extra
+				delete(c.fields, name)
+			}
+		}
+	}
+
+	// expected fields not found
+	if len(resultTags) < 1 {
+		return c.cfg.Tags
+	}
+
+	// copy static tags
+	for k, v := range c.cfg.Tags {
+		// but dont rewrite dynamic
+		if _, ok := resultTags[k]; !ok {
+			resultTags[k] = v
+		}
+	}
+
+	return resultTags
 }
 
 func (c *core) createExceptions() []sentry.Exception {
