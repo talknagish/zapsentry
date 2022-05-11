@@ -345,7 +345,7 @@ func filterFrames(frames []sentry.Frame) []sentry.Frame {
 	for i := range frames {
 		// Skip zapsentry and zap internal frames, except for frames in _test packages (for
 		// testing).
-		if (strings.HasPrefix(frames[i].Module, "github.com/TheZeroSlave/zapsentry") ||
+		if (strings.HasPrefix(frames[i].Module, "github.com/talknagish/zapsentry") ||
 			strings.HasPrefix(frames[i].Function, "go.uber.org/zap")) &&
 			!strings.HasSuffix(frames[i].Module, "_test") {
 			return frames[0:i]
