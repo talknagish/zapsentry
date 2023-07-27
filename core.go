@@ -93,6 +93,7 @@ func (c *core) Write(ent zapcore.Entry, fs []zapcore.Field) error {
 		event.Extra = clone.fields
 		event.Tags = clone.transferExtrasToTags()
 		event.Exception = clone.createExceptions()
+
 		event.Fingerprint = []string{"{{ default }}", string(sentrySeverity(ent.Level))}
 
 		if event.Exception == nil && !c.cfg.DisableStacktrace && c.client.Options().AttachStacktrace {
